@@ -1,9 +1,13 @@
 {
   "name": "login-tests",
   "version": "1.0.0",
-  "description": "",
+  "description": "Playwright test automation for a mobile login flow, AI-assisted and human-reviewed",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "start": "node sample-app/server.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
