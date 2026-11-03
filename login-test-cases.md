@@ -27,7 +27,7 @@ Practice app. Rules below are the assumed requirements; change them if your samp
 | LG-04 | Core | Error timing | Type a wrong password without tapping Log in | No credential error appears while typing | |
 | LG-05 | Lockout | Lock after 5 failures | Submit wrong password 5 times | Message: "Account locked. Try again in 15 minutes or reset your password." | Auto |
 | LG-06 | Lockout | Locked account, correct password | After lockout, submit the correct password | Login blocked; lockout message still shown | Auto |
-| LG-07 | Lockout | Reset unlocks account | Locked account, tap "reset your password" in the message, enter email, tap Reset password, go back, log in | Link opens the reset screen; confirmation shown; login then succeeds | Auto |
+| LG-07 | Lockout | Full reset flow | Lock the account (5 wrong passwords), tap the blue Reset password button, enter email + new password twice, tap Reset password, tap Back to log in, log in with the new password, tap Log out | Reset screen opens; success message "...You can log in now."; login with the new password reaches Welcome home; Log out returns to login | Auto |
 | LG-08 | Empty | Both fields empty | Tap Log in with nothing entered | "Email is required" and "Password is required" in red; button stays enabled | Auto |
 | LG-09 | Empty | Only email filled | Fill email, tap Log in | "Password is required" in red | |
 | LG-10 | Empty | Only password filled | Fill password, tap Log in | "Email is required" in red | |
@@ -50,9 +50,22 @@ Practice app. Rules below are the assumed requirements; change them if your samp
 | LG-27 | Input | Show/Hide password | Type a password, tap the eye icon, tap it again | First tap shows the typed text; second tap masks it again | Auto |
 | LG-28 | Visual | Forgot password styling | Look at the login screen | "Forgot password?" looks like a button with a lock icon, easy to tap with a thumb | Manual |
 | LG-29 | Visual | Brand header | Open the login screen | Logo and app name shown in a header with a decorative background | Auto |
+| LG-30 | Visual | Buttons clear the keyboard | Tap the Email field, then the Password field, with the on-screen keyboard open | Page scrolls so "Log in" and "Forgot password?" are both fully visible above the keyboard; nothing is hidden or untappable | Manual |
+| LG-31 | Visual | Steady layout while typing | Tap Email, type a full address, tap Password, type a password | Screen scrolls once to clear the keyboard, then stays still while typing; header is not pushed off screen; blank space under "Forgot password?" is no larger than the keyboard | Manual |
+| LG-32 | Lockout | Old password after reset | Reset the password, go back to log in, use the OLD password | Login fails with the generic error; only the new password works | Auto |
+| LG-33 | Input | Reset form validation | On the reset screen use a 5-character new password and a different confirmation | "Password must be 8 to 64 characters" and "Passwords do not match" shown; no success message | Auto |
+| LG-34 | Lockout | Lock expires | Lock the account, wait 15 minutes, submit a wrong password | Counter starts again: "4 attempts left", not an instant lock | Manual |
+| LG-35 | Visual | Error fits on one line | Submit one wrong password on a phone | "Incorrect email or password. 4 attempts left." fits on one line | Manual |
+| LG-36 | Visual | Home screen background | Log in successfully | Home screen has the brand header and gradient background | Manual |
 
 ## Found while exploring on the iOS Simulator
 - Forgot password was plain link text, so it was changed to a button style (LG-28).
 - Users could not check what they typed, so a Show/Hide toggle was added (LG-27).
 - The "reset your password" text in the lockout message was not a link, so it became a working link (LG-07).
 - The screen looked bare, so a brand header was added (LG-29).
+- The on-screen keyboard covered the Log in and Forgot password buttons, so the page now adds scroll room and scrolls them into view when a field is focused (LG-30).
+- That first fix added too much blank space and kept moving the page while typing, so it now measures the real keyboard height and scrolls once, only as far as needed (LG-31).
+- The lockout message had its reset text inside the red box, so a separate Reset password button now sits under it (LG-07).
+- The reset screen only unlocked the account, so it now sets a new password, with a success message and a login with the new password (LG-07, LG-32, LG-33).
+- After a lock ran out, the attempt counter was not cleared, so the first wrong password locked the account again. The counter now restarts (LG-34).
+- The attempts-left message wrapped onto two lines, so the text was made smaller (LG-35). The home screen got a background (LG-36).

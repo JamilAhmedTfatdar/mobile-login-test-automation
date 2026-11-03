@@ -1,0 +1,30 @@
+{
+  "users": {
+    "valid": { "email": "user@example.com", "password": "CorrectPass123" }
+  },
+  "newPassword": "NewPass456!",
+  "wrongPasswords": [
+    "Wrong0Pass123",
+    "Wrong1Pass123",
+    "Wrong2Pass123",
+    "Wrong3Pass123",
+    "Wrong4Pass123"
+  ],
+  "messages": {
+    "wrongPassword": "Incorrect email or password.",
+    "attemptsLeft": [
+      "Incorrect email or password. 4 attempts left.",
+      "Incorrect email or password. 3 attempts left.",
+      "Incorrect email or password. 2 attempts left.",
+      "Incorrect email or password. 1 attempt left."
+    ],
+    "accountLocked": "Account locked",
+    "emailRequired": "Email is required",
+    "passwordRequired": "Password is required",
+    "resetDone": "You can log in now",
+    "passwordLength": "Password must be 8 to 64 characters",
+    "passwordMismatch": "Passwords do not match",
+    "homeHeading": "Welcome home",
+    "resetHeading": "Reset your password"
+  }
+}

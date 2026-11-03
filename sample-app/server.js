@@ -4,9 +4,11 @@
 // Rules it follows (same as login-test-cases.md):
 // - Wrong credentials: generic error "Incorrect email or password. N attempts left." shown after Log in
 // - 5 failed attempts locks the account for 15 minutes (tracked per browser session)
-// - The lockout message contains a working "reset your password" link
-// - Forgot password screen: enter email, tap Reset password -> account is unlocked (simplified
-//   simulation: a real app would email a reset link first)
+// - When locked, a "Reset password" button appears under the error message
+// - Reset screen: enter email + new password (8-64 chars) + confirm -> password is changed and the
+//   account is unlocked (simplified simulation: a real app would email a reset link first).
+//   The new password is kept per browser session, so each test starts with the original password.
+// - The lock ends by itself after 15 minutes and the attempt counter starts again at 5
 // - Empty fields: "Email is required" / "Password is required" in red under the field
 // - Email: max 254 chars, spaces trimmed, printable ASCII only (emoji rejected)
 // - Password: 8-64 chars, spaces kept, Show/Hide toggle (eye icon) reveals what was typed
@@ -22,13 +24,13 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 3100;
 const VALID = { email: 'user@example.com', password: 'CorrectPass123' };
 const MAX_FAILS = 5;
-const LOCK_MS = 15 * 60 * 1000;
+const LOCK_MS = Number(process.env.LOCK_MS) || 15 * 60 * 1000; // LOCK_MS only for testing
 const LOCK_MSG = 'Account locked. Try again in 15 minutes or reset your password.';
-const RESET_MSG = 'If an account exists for that email, it has been reset. You can log in now.';
+const RESET_MSG = 'If an account exists for that email, the password has been updated. You can log in now.';
 
 // Lockout is tracked per browser session (cookie), so each Playwright test,
 // which starts with a fresh browser context, gets a clean counter.
-const sessions = new Map(); // sid -> { fails, lockedUntil }
+const sessions = new Map(); // sid -> { fails, lockedUntil, password }
 
 function getSid(req) {
   const m = /(?:^|;\s*)sid=([a-f0-9]+)/.exec(req.headers.cookie || '');
@@ -43,7 +45,7 @@ function session(req) {
     sid = crypto.randomBytes(8).toString('hex');
     headers['Set-Cookie'] = `sid=${sid}; Path=/; HttpOnly`;
   }
-  const s = sessions.get(sid) || { fails: 0, lockedUntil: 0 };
+  const s = sessions.get(sid) || { fails: 0, lockedUntil: 0, password: VALID.password };
   sessions.set(sid, s);
   return { s, headers };
 }
@@ -89,7 +91,7 @@ const PAGE_STYLE = `
   .icon-btn .slash { display: none; }
   .icon-btn[data-visible="true"] .slash { display: inline; }
   .err { color: #c00; font-size: 14px; min-height: 18px; margin-top: 4px; }
-  .alert { color: #c00; background: #fee; border: 1px solid #c00; border-radius: 8px; padding: 10px; margin-top: 12px; }
+  .alert { color: #c00; background: #fee; border: 1px solid #c00; border-radius: 8px; padding: 10px 8px; margin-top: 12px; font-size: 13px; }
   .alert a { color: #900; font-weight: 600; }
   .ok { color: #0a6b2d; background: #eafaf0; border: 1px solid #0a6b2d; border-radius: 8px; padding: 10px; margin-top: 12px; }
   .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
@@ -98,6 +100,21 @@ const PAGE_STYLE = `
   .btn.primary { background: #0b5fff; color: #fff; }
   .btn.secondary { background: #fff; color: #0b5fff; }
   .btn:disabled { background: #9ab; border-color: #9ab; }
+  /* Compact layout while the on-screen keyboard is open, so the form fits above it. */
+  body.kb-compact .hero { display: none; }
+  body.kb-compact .card { margin-top: 56px; padding-top: 14px; }
+  body.kb-compact h1 { font-size: 20px; }
+  body.kb-compact .sub { display: none; }
+  body.kb-compact label { margin-top: 8px; }
+  body.kb-compact .err { min-height: 0; margin-top: 2px; }
+  body.kb-compact .alert { margin-top: 8px; padding: 8px; }
+  body.kb-compact .btn { margin-top: 10px; padding: 10px 16px; }
+  /* Home screen background */
+  body.home { min-height: 100vh; background: linear-gradient(180deg, #eaf1ff 0%, #c9dcff 100%); }
+  body.home::after { content: ""; position: fixed; width: 340px; height: 340px; border-radius: 50%;
+                     background: rgba(11,95,255,.10); right: -120px; bottom: -120px; z-index: -1; }
+  body.home .hero { padding-bottom: 110px; }
+  body.home .card { margin-top: -64px; }
 `;
 
 function head(title) {
@@ -128,6 +145,7 @@ const LOGIN_PAGE = `${head('Sample App - Sign in')}
       <div class="err" id="password-err"></div>
 
       <div id="form-alert" class="alert" role="alert" hidden></div>
+      <a href="/forgot" id="reset-account-link" class="btn primary" hidden>Reset password</a>
       <button type="submit" id="login-button" class="btn primary"><span>Log in</span>${ICONS.arrow}</button>
       <button type="button" id="retry-button" class="btn secondary" hidden>Retry</button>
     </form>
@@ -143,25 +161,35 @@ const LOGIN_PAGE = `${head('Sample App - Sign in')}
   const retryBtn = document.getElementById('retry-button');
   const alertBox = document.getElementById('form-alert');
 
+  // Keyboard handling. Measure the real keyboard height (visualViewport) and add exactly that
+  // much room below the card, then scroll only as far as needed to reveal the Forgot password
+  // button. No fixed spacing, no smooth scrolling, and nothing moves while you type.
+  const forgotLink = document.getElementById('forgot-link');
+  const vv = window.visualViewport;
+  function fitKeyboard() {
+    if (!vv) return;
+    const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.body.classList.toggle('kb-compact', kb > 0);
+    document.body.style.paddingBottom = kb > 0 ? kb + 'px' : '';
+    if (kb === 0) return;
+    // 72px extra: the floating bar (arrows and check mark) sits above the keyboard.
+    const hidden = forgotLink.getBoundingClientRect().bottom - (vv.offsetTop + vv.height) + 72;
+    if (hidden > 0) window.scrollBy(0, hidden);
+  }
+  if (vv) vv.addEventListener('resize', fitKeyboard);
+  document.addEventListener('focusin', (e) => {
+    if (e.target.tagName === 'INPUT') setTimeout(fitKeyboard, 300);
+  });
+
   function setErr(field, msg) { document.getElementById(field + '-err').textContent = msg || ''; }
 
-  // Shows a message in the red alert box. For the lockout message, "reset your password"
-  // becomes a working link to the forgot-password screen.
-  function showAlert(msg, withResetLink) {
-    alertBox.textContent = '';
-    const marker = 'reset your password';
-    const i = msg.indexOf(marker);
-    if (withResetLink && i >= 0) {
-      alertBox.append(msg.slice(0, i));
-      const a = document.createElement('a');
-      a.href = '/forgot';
-      a.textContent = marker;
-      alertBox.append(a);
-      alertBox.append(msg.slice(i + marker.length));
-    } else {
-      alertBox.textContent = msg;
-    }
+  // Shows a message in the red alert box. When the account is locked, a separate
+  // "Reset password" button appears under the message.
+  const resetBtn = document.getElementById('reset-account-link');
+  function showAlert(msg, locked) {
+    alertBox.textContent = msg;
     alertBox.hidden = false;
+    resetBtn.hidden = !locked;
   }
 
   function validateEmail() {
@@ -193,6 +221,7 @@ const LOGIN_PAGE = `${head('Sample App - Sign in')}
   async function submit() {
     if (loginBtn.disabled) return;
     alertBox.hidden = true;
+    document.getElementById('reset-account-link').hidden = true;
     retryBtn.hidden = true;
     const okEmail = validateEmail();
     const okPass = validatePassword();
@@ -222,7 +251,7 @@ const LOGIN_PAGE = `${head('Sample App - Sign in')}
 </body></html>`;
 
 const HOME_PAGE = `${head('Sample App - Home')}
-<body>
+<body class="home">
   ${HERO}
   <main class="card">
     <h1>Welcome home</h1>
@@ -236,11 +265,19 @@ const FORGOT_PAGE = `${head('Sample App - Reset password')}
   ${HERO}
   <main class="card">
     <h1>Reset your password</h1>
-    <p class="sub">Enter your account email to reset your password.</p>
+    <p class="sub">Enter your email and choose a new password.</p>
     <form id="reset-form" novalidate>
       <label for="forgot-email">Email</label>
       <input id="forgot-email" name="email" type="email" autocomplete="username" maxlength="254">
       <div class="err" id="forgot-err"></div>
+
+      <label for="new-password">New password</label>
+      <input id="new-password" name="new-password" type="password" autocomplete="new-password" maxlength="64">
+      <div class="err" id="new-err"></div>
+
+      <label for="confirm-password">Confirm password</label>
+      <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" maxlength="64">
+      <div class="err" id="confirm-err"></div>
       <div id="reset-status" class="ok" role="status" hidden></div>
       <button type="submit" id="reset-button" class="btn primary"><span>Reset password</span></button>
     </form>
@@ -252,23 +289,37 @@ const FORGOT_PAGE = `${head('Sample App - Reset password')}
   const input = document.getElementById('forgot-email');
   const err = document.getElementById('forgot-err');
   const status = document.getElementById('reset-status');
+  const newPw = document.getElementById('new-password');
+  const confirmPw = document.getElementById('confirm-password');
+  const newErr = document.getElementById('new-err');
+  const confirmErr = document.getElementById('confirm-err');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     status.hidden = true;
     err.textContent = '';
+    newErr.textContent = '';
+    confirmErr.textContent = '';
     const v = input.value.trim();
-    if (!v) { err.textContent = 'Email is required'; return; }
-    if (!/^[\\x21-\\x7E]+@[\\x21-\\x7E]+\\.[\\x21-\\x7E]+$/.test(v)) { err.textContent = 'Enter a valid email'; return; }
+    let ok = true;
+    if (!v) { err.textContent = 'Email is required'; ok = false; }
+    else if (!/^[\\x21-\\x7E]+@[\\x21-\\x7E]+\\.[\\x21-\\x7E]+$/.test(v)) { err.textContent = 'Enter a valid email'; ok = false; }
+    if (!newPw.value) { newErr.textContent = 'New password is required'; ok = false; }
+    else if (newPw.value.length < 8 || newPw.value.length > 64) { newErr.textContent = 'Password must be 8 to 64 characters'; ok = false; }
+    if (confirmPw.value !== newPw.value) { confirmErr.textContent = 'Passwords do not match'; ok = false; }
+    if (!ok) return;
     try {
       const res = await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: v })
+        body: JSON.stringify({ email: v, password: newPw.value })
       });
       const data = await res.json();
+      if (!res.ok) { err.textContent = data.message; return; }
       status.textContent = data.message;
       status.hidden = false;
+      newPw.value = '';
+      confirmPw.value = '';
     } catch (x) {
       err.textContent = 'No internet connection. Check your connection and try again.';
     }
@@ -309,10 +360,12 @@ const server = http.createServer((req, res) => {
     return readJson(req, (body) => {
       const { s, headers } = session(req);
 
+      // The lock has run out: start counting again from 5 attempts.
+      if (s.lockedUntil && s.lockedUntil <= Date.now()) { s.lockedUntil = 0; s.fails = 0; }
       if (s.lockedUntil > Date.now()) return sendJson(res, 423, { message: LOCK_MSG }, headers);
 
       const email = String(body.email || '').trim().toLowerCase();
-      if (email === VALID.email && body.password === VALID.password) {
+      if (email === VALID.email && body.password === s.password) {
         s.fails = 0;
         return sendJson(res, 200, { ok: true }, headers);
       }
@@ -334,10 +387,14 @@ const server = http.createServer((req, res) => {
       const { s, headers } = session(req);
       const email = String(body.email || '').trim().toLowerCase();
       if (!email) return sendJson(res, 400, { message: 'Email is required' }, headers);
+      const pw = String(body.password || '');
+      if (pw.length < 8 || pw.length > 64) {
+        return sendJson(res, 400, { message: 'Password must be 8 to 64 characters' }, headers);
+      }
 
       // Simplified simulation: a real app would email a reset link first.
       // Same answer for every email, so the page never reveals which accounts exist.
-      if (email === VALID.email) { s.fails = 0; s.lockedUntil = 0; }
+      if (email === VALID.email) { s.password = pw; s.fails = 0; s.lockedUntil = 0; }
       return sendJson(res, 200, { message: RESET_MSG }, headers);
     });
   }

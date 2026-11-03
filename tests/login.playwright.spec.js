@@ -53,22 +53,56 @@ test('locks the account after 5 failed attempts', async ({ page }) => {
   await expect(page).not.toHaveURL(/home/);
 });
 
-// LG-07: the "reset your password" link in the lockout message works and unlocks the account
-test('reset password link unlocks a locked account', async ({ page }) => {
+// LG-07: lock -> Reset password button -> set a new password -> log in with it -> log out
+test('locked account: reset password, log in with the new password, log out', async ({ page }) => {
+  const NEW_PASS = 'NewPass456!';
   await lockAccount(page);
   await expect(page.getByRole('alert')).toContainText('Account locked');
 
-  await page.getByRole('alert').getByRole('link', { name: 'reset your password' }).click();
+  await page.getByRole('link', { name: 'Reset password', exact: true }).click();
   await expect(page).toHaveURL(/forgot/);
   await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
 
   await emailField(page).fill(VALID.email);
+  await page.getByLabel('New password', { exact: true }).fill(NEW_PASS);
+  await page.getByLabel('Confirm password', { exact: true }).fill(NEW_PASS);
+  await page.getByRole('button', { name: 'Reset password' }).click();
+  await expect(page.getByRole('status')).toContainText('You can log in now');
+
+  await page.getByRole('link', { name: 'Back to log in' }).click();
+  await expect(page).toHaveURL(/login/);
+  await login(page, VALID.email, NEW_PASS);
+  await expect(page).toHaveURL(/home/);
+  await expect(page.getByRole('heading', { name: 'Welcome home' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/login/);
+});
+
+// LG-32: the old password stops working after a reset
+test('after a reset the old password no longer works', async ({ page }) => {
+  await page.goto('/forgot');
+  await emailField(page).fill(VALID.email);
+  await page.getByLabel('New password', { exact: true }).fill('NewPass456!');
+  await page.getByLabel('Confirm password', { exact: true }).fill('NewPass456!');
   await page.getByRole('button', { name: 'Reset password' }).click();
   await expect(page.getByRole('status')).toContainText('You can log in now');
 
   await page.getByRole('link', { name: 'Back to log in' }).click();
   await login(page, VALID.email, VALID.pass);
-  await expect(page).toHaveURL(/home/);
+  await expect(page.getByRole('alert')).toContainText('Incorrect email or password');
+});
+
+// LG-33: reset form checks the new password
+test('reset form rejects a short or mismatched password', async ({ page }) => {
+  await page.goto('/forgot');
+  await emailField(page).fill(VALID.email);
+  await page.getByLabel('New password', { exact: true }).fill('short');
+  await page.getByLabel('Confirm password', { exact: true }).fill('different1');
+  await page.getByRole('button', { name: 'Reset password' }).click();
+  await expect(page.getByText('Password must be 8 to 64 characters')).toBeVisible();
+  await expect(page.getByText('Passwords do not match')).toBeVisible();
+  await expect(page.getByRole('status')).toBeHidden();
 });
 
 // LG-08: both fields empty
