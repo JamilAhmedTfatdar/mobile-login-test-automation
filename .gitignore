@@ -5,3 +5,5 @@ blob-report/
 playwright/.cache/
 .DS_Store
 *.zip
+*.zip
+.idea/

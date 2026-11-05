@@ -9,7 +9,7 @@ script taps and types. Nothing is clicked by hand.
 appium/
   wdio.conf.js                 device, Appium, and sample app startup
   test/
-    specs/login.spec.js        WHAT is tested (9 tests, IDs match login-test-cases.md)
+    specs/login.spec.js        WHAT is tested (11 tests, IDs match login-test-cases.md)
     pageobjects/               HOW to do it (BasePage, LoginPage, ForgotPasswordPage, HomePage)
     locators/                  WHERE things are (one file per screen)
     data/users.json            emails, passwords, expected messages
@@ -29,6 +29,15 @@ npm test
 
 The Simulator opens by itself. The first run builds a helper app (WebDriverAgent)
 and can take a few minutes. After that it is much faster.
+
+## Watch it in slow motion
+
+The script pauses before every tap, keystroke and page load so you can follow it.
+
+```
+SLOW_MS=3000 npm test    # slower
+SLOW_MS=0 npm test       # full speed
+```
 
 ## Pick a different device
 
