@@ -1,5 +1,7 @@
 # Mobile Login Test Automation (Practice Project)
 
+[![Playwright tests](https://github.com/JamilAhmedTfatdar/mobile-login-test-automation/actions/workflows/playwright.yml/badge.svg)](https://github.com/JamilAhmedTfatdar/mobile-login-test-automation/actions/workflows/playwright.yml)
+
 A small, self-contained project that shows how I design, automate and review tests for a mobile login screen. It uses a sample login app with realistic rules (error messages, attempts-left warning, account lockout, password reset, offline handling) and two automated suites:
 
 - **Playwright**: fast tests in an iPhone 13 mobile-Safari profile (13 tests).
