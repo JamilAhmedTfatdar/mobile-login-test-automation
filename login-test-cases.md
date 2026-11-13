@@ -57,6 +57,7 @@ Practice app. Rules below are the assumed requirements; change them if your samp
 | LG-34 | Lockout | Lock expires | Lock the account, wait 15 minutes, submit a wrong password | Counter starts again: "4 attempts left", not an instant lock | Manual |
 | LG-35 | Visual | Error fits on one line | Submit one wrong password on a phone | "Incorrect email or password. 4 attempts left." fits on one line | Manual |
 | LG-36 | Visual | Home screen background | Log in successfully | Home screen has the brand header and gradient background | Manual |
+| LG-37 | Input | iOS strong-password prompt | On the reset screen, tap the New password field and let Safari offer a strong password | The prompt does not hide the fields or buttons; typing your own password still works; accepting the suggestion fills New password and Confirm password with the same value and the reset succeeds | Manual |
 
 ## Found while exploring on the iOS Simulator
 - Forgot password was plain link text, so it was changed to a button style (LG-28).
